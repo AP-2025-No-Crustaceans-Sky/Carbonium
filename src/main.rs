@@ -38,14 +38,12 @@ impl PlanetAI for Carbonium {
                 }
                 Some(PlanetToOrchestrator::SunrayAck {
                     planet_id: state.id(),
-                    timestamp: SystemTime::now(),
                 })
             }
-            OrchestratorToPlanet::InternalStateRequest(internal_state_request_msg) => {
+            OrchestratorToPlanet::InternalStateRequest => {
                 Some(PlanetToOrchestrator::InternalStateResponse {
                     planet_id: state.id(),
                     planet_state: todo!(), // Requires ownership, but state is &mut. I think a reference should be passed.
-                    timestamp: SystemTime::now(),
                 })
             }
             _ => panic!("No other type of message should be received"), // Why separate into
@@ -113,11 +111,6 @@ impl PlanetAI for Carbonium {
                     }),
                 })
             }
-            ExplorerToPlanet::InternalStateRequest { explorer_id } => {
-                Some(PlanetToExplorer::InternalStateResponse {
-                    planet_state: todo!(), // Requires ownership, but state is &mut. I think a reference should be passed.
-                })
-            }
         }
     }
     fn handle_asteroid(
@@ -153,14 +146,19 @@ impl PlanetAI for Carbonium {
 }
 
 fn main() {
+    let rx_orchestrator: mpsc::Receiver<OrchestratorToPlanet> = todo!();
+    let tx_orchestrator: mpsc::Sender<PlanetToOrchestrator> = todo!();
+    let rx_explorer: mpsc::Receiver<ExplorerToPlanet> = todo!();
+    let tx_explorer: mpsc::Sender<PlanetToExplorer> = todo!();
+
     // Example of usage
     let planet = Planet::new(
         0,
         Carbonium::PLANET_TYPE,
-        Carbonium::AI,
+        Box::new(Carbonium::AI),
         Carbonium::BASIC_RESOURCES.to_vec(),
         Carbonium::COMPLEX_RESOURCES.to_vec(),
-        todo!(),
-        todo!(),
+        (rx_orchestrator, tx_orchestrator),
+        (rx_explorer, tx_explorer),
     );
 }

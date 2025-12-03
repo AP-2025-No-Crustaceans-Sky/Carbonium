@@ -12,7 +12,7 @@ dependencies = [
 [[package]]
 name = "common-game"
 version = "0.1.0"
-source = "git+https://github.com/unitn-ap-2025/common.git#48c7ce7c3f6cb5a1f55fe454aab949f192a207f8"
+source = "git+https://github.com/unitn-ap-2025/common.git#ffa9b9a860c4064d8cd7da93577a1386c2693588"
 dependencies = [
  "lazy_static",
  "paste",
