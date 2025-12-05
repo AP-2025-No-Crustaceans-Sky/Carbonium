@@ -4,7 +4,8 @@ use common_game::{
     components::{
         planet::{Planet, PlanetAI, PlanetState, PlanetType},
         resource::{
-            BasicResource, BasicResourceType, Carbon, Combinator, ComplexResourceType, Generator,
+            BasicResource, BasicResourceType, Carbon, Combinator, ComplexResource,
+            ComplexResourceRequest, ComplexResourceType, Generator, GenericResource,
         },
         rocket::Rocket,
     },
@@ -21,7 +22,6 @@ pub fn create_carbonium(
     rx_orchestrator: mpsc::Receiver<OrchestratorToPlanet>,
     tx_orchestrator: mpsc::Sender<PlanetToOrchestrator>,
     rx_explorer: mpsc::Receiver<ExplorerToPlanet>,
-    tx_explorer: mpsc::Sender<PlanetToExplorer>,
 ) -> Planet {
     Planet::new(
         id,
@@ -30,7 +30,7 @@ pub fn create_carbonium(
         Carbonium::BASIC_RESOURCES.to_vec(),
         Carbonium::COMPLEX_RESOURCES.to_vec(),
         (rx_orchestrator, tx_orchestrator),
-        (rx_explorer, tx_explorer),
+        rx_explorer,
     )
     .unwrap() // This shouldn't ever panic because PlanetType requirements are always correct.
 }
@@ -91,7 +91,7 @@ impl PlanetAI for Carbonium {
                 OrchestratorToPlanet::InternalStateRequest => {
                     Some(PlanetToOrchestrator::InternalStateResponse {
                         planet_id: state.id(),
-                        planet_state: todo!(), // Requires ownership, but state is &mut. I think a reference should be passed.
+                        planet_state: todo!(), // FIX: Requires ownership, but state is &mut. I think a reference should be passed.
                     })
                 }
                 _ => panic!("No other type of message should be received"), // Why separate into
@@ -152,10 +152,42 @@ impl PlanetAI for Carbonium {
                 }
                 ExplorerToPlanet::CombineResourceRequest {
                     explorer_id: _,
-                    msg: _,
-                } => Some(PlanetToExplorer::CombineResourceResponse {
-                    complex_response: None,
-                }),
+                    msg,
+                } => {
+                    let (resource1, resource2): (GenericResource, GenericResource) = match msg {
+                        ComplexResourceRequest::Water(hydrogen, oxygen) => (
+                            GenericResource::BasicResources(BasicResource::Hydrogen(hydrogen)),
+                            GenericResource::BasicResources(BasicResource::Oxygen(oxygen)),
+                        ),
+                        ComplexResourceRequest::Diamond(carbon, carbon1) => (
+                            GenericResource::BasicResources(BasicResource::Carbon(carbon)),
+                            GenericResource::BasicResources(BasicResource::Carbon(carbon1)),
+                        ),
+                        ComplexResourceRequest::Life(water, carbon) => (
+                            GenericResource::ComplexResources(ComplexResource::Water(water)),
+                            GenericResource::BasicResources(BasicResource::Carbon(carbon)),
+                        ),
+                        ComplexResourceRequest::Robot(silicon, life) => (
+                            GenericResource::BasicResources(BasicResource::Silicon(silicon)),
+                            GenericResource::ComplexResources(ComplexResource::Life(life)),
+                        ),
+                        ComplexResourceRequest::Dolphin(water, life) => (
+                            GenericResource::ComplexResources(ComplexResource::Water(water)),
+                            GenericResource::ComplexResources(ComplexResource::Life(life)),
+                        ),
+                        ComplexResourceRequest::AIPartner(robot, diamond) => (
+                            GenericResource::ComplexResources(ComplexResource::Robot(robot)),
+                            GenericResource::ComplexResources(ComplexResource::Diamond(diamond)),
+                        ),
+                    };
+                    Some(PlanetToExplorer::CombineResourceResponse {
+                        complex_response: Err((
+                            String::from("Not supported"),
+                            resource1,
+                            resource2,
+                        )),
+                    })
+                }
                 ExplorerToPlanet::AvailableEnergyCellRequest { explorer_id: _ } => {
                     Some(PlanetToExplorer::AvailableEnergyCellResponse {
                         available_cells: state.cells_iter().fold(0, |acc, energy_cell| {
@@ -201,3 +233,6 @@ impl PlanetAI for Carbonium {
         self.enabled = false;
     }
 }
+
+#[cfg(test)]
+mod test {}
