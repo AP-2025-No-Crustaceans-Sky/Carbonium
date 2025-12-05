@@ -235,4 +235,60 @@ impl PlanetAI for Carbonium {
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use std::sync::mpsc::{Receiver, Sender};
+
+    use super::*;
+
+    fn build_planet() -> (Planet, Sender<OrchestratorToPlanet>, Receiver<PlanetToOrchestrator>, Sender<ExplorerToPlanet>) {
+        let (tx_rx_orch_planet, rx_orch_planet) = mpsc::channel();
+        let (tx_planet_orch, rx_planet_orch) = mpsc::channel();
+        let (tx_expl_planet, rx_expl_planet) = mpsc::channel();
+        let planet = create_carbonium(1, rx_orch_planet, tx_planet_orch, rx_expl_planet);
+        (planet, tx_rx_orch_planet, rx_planet_orch, tx_expl_planet)
+    }
+
+    #[test]
+    fn test_create_carbonium() {
+        let (planet, ..) = build_planet();
+        // PlanetType doesn't implement PartialEq, so we can't compare it directly like this:
+        //      planet.planet_type() == PlanetType::A;
+        match planet.planet_type() {
+            PlanetType::A => { /* Test passed */ },
+            _ => panic!("Expected PlanetType::A, found {:?}", planet.planet_type()),
+        }
+    }
+
+    #[test]
+    fn test_carbonium_basic_resources() {
+        let basic_resources: HashSet<BasicResourceType> =
+            HashSet::from(Carbonium::BASIC_RESOURCES);
+        assert!(basic_resources.contains(&BasicResourceType::Carbon));
+        assert_eq!(basic_resources.len(), 1);
+    }
+
+    #[test]
+    fn test_carbonium_complex_resources() {
+        let complex_resources: HashSet<ComplexResourceType> =
+            HashSet::from(Carbonium::COMPLEX_RESOURCES);
+        assert!(complex_resources.is_empty());
+    }
+
+    #[test]
+    fn test_carbonium_ai_initial_state() {
+        let ai = Carbonium::AI;
+        assert!(!ai.enabled);
+        assert!(ai.storage.is_empty());
+    }
+
+    #[test]
+    fn test_carbonium_ai_enable_disable() {
+        let (planet, ..) = build_planet();
+        let state = planet.state();
+        let mut ai = Carbonium::AI;
+        ai.start(&state);
+        assert!(ai.enabled);
+        ai.stop(&state);
+        assert!(!ai.enabled);
+    }
+}
