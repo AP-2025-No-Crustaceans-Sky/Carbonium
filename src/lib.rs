@@ -56,7 +56,7 @@ impl PlanetAI for Carbonium {
         _: &Combinator,
         msg: OrchestratorToPlanet,
     ) -> Option<PlanetToOrchestrator> {
-        if self.enabled {
+        if !self.enabled {
             None
         } else {
             match msg {
@@ -91,7 +91,7 @@ impl PlanetAI for Carbonium {
                 OrchestratorToPlanet::InternalStateRequest => {
                     Some(PlanetToOrchestrator::InternalStateResponse {
                         planet_id: state.id(),
-                        planet_state: todo!(), // FIX: Requires ownership, but state is &mut. I think a reference should be passed.
+                        planet_state: state.to_dummy(),
                     })
                 }
                 _ => panic!("No other type of message should be received"), // Why separate into
@@ -107,7 +107,7 @@ impl PlanetAI for Carbonium {
         _: &Combinator, // Same as above.
         msg: ExplorerToPlanet,
     ) -> Option<PlanetToExplorer> {
-        if self.enabled {
+        if !self.enabled {
             None
         } else {
             match msg {
@@ -208,7 +208,7 @@ impl PlanetAI for Carbonium {
         _: &Generator,
         _: &Combinator,
     ) -> Option<Rocket> {
-        if self.enabled {
+        if !self.enabled {
             None
         } else if state.has_rocket() {
             state.take_rocket()
@@ -236,11 +236,22 @@ impl PlanetAI for Carbonium {
 
 #[cfg(test)]
 mod test {
-    use std::sync::mpsc::{Receiver, Sender};
-
     use super::*;
+    use common_game::components::forge::Forge;
+    use lazy_static::lazy_static;
+    use std::sync::mpsc::{Receiver, Sender};
+    use std::thread;
 
-    fn build_planet() -> (Planet, Sender<OrchestratorToPlanet>, Receiver<PlanetToOrchestrator>, Sender<ExplorerToPlanet>) {
+    lazy_static! {
+        static ref FORGE: Forge = Forge::new().unwrap();
+    }
+
+    fn build_planet() -> (
+        Planet,
+        Sender<OrchestratorToPlanet>,
+        Receiver<PlanetToOrchestrator>,
+        Sender<ExplorerToPlanet>,
+    ) {
         let (tx_rx_orch_planet, rx_orch_planet) = mpsc::channel();
         let (tx_planet_orch, rx_planet_orch) = mpsc::channel();
         let (tx_expl_planet, rx_expl_planet) = mpsc::channel();
@@ -254,15 +265,14 @@ mod test {
         // PlanetType doesn't implement PartialEq, so we can't compare it directly like this:
         //      planet.planet_type() == PlanetType::A;
         match planet.planet_type() {
-            PlanetType::A => { /* Test passed */ },
+            PlanetType::A => { /* Test passed */ }
             _ => panic!("Expected PlanetType::A, found {:?}", planet.planet_type()),
         }
     }
 
     #[test]
     fn test_carbonium_basic_resources() {
-        let basic_resources: HashSet<BasicResourceType> =
-            HashSet::from(Carbonium::BASIC_RESOURCES);
+        let basic_resources: HashSet<BasicResourceType> = HashSet::from(Carbonium::BASIC_RESOURCES);
         assert!(basic_resources.contains(&BasicResourceType::Carbon));
         assert_eq!(basic_resources.len(), 1);
     }
@@ -290,5 +300,206 @@ mod test {
         assert!(ai.enabled);
         ai.stop(&state);
         assert!(!ai.enabled);
+    }
+
+    #[test]
+    fn orchestrator_to_planet_start() {
+        todo!()
+    }
+
+    #[test]
+    fn orchestrator_to_planet_stop() {
+        todo!()
+    }
+
+    #[test]
+    fn orchestrator_to_planet_state_request() {
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = mpsc::channel();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = mpsc::channel();
+        let (_, rx_explorer_to_planet) = mpsc::channel();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+        thread::spawn(move || carbonium.run());
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+        /* let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+        ));  FIX: Shouldn't we receive an acknowlegment? */
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::InternalStateRequest)
+            .unwrap();
+        let res = rx_planet_to_orchestrator.recv();
+        if let Ok(PlanetToOrchestrator::InternalStateResponse {
+            planet_id: 0,
+            planet_state,
+        }) = res
+        {
+            assert!(
+                !planet_state.has_rocket && planet_state.charged_cells_count == 0,
+                "The planet should be empty"
+            );
+        } else {
+            panic!("Unexpected response from planet.");
+        }
+    }
+    #[test]
+    fn orchestrator_to_planet_sunray() {
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = mpsc::channel();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = mpsc::channel();
+        let (tx_explorer_to_planet, rx_explorer_to_planet) = mpsc::channel();
+        let (tx_planet_to_explorer, rx_planet_to_explorer) = mpsc::channel();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+        thread::spawn(move || carbonium.run());
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+        /* let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+        ));  FIX: Shouldn't we receive an acknowlegment? */
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
+            .unwrap();
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
+        ));
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::InternalStateRequest)
+            .unwrap();
+        let res = rx_planet_to_orchestrator.recv();
+        if let Ok(PlanetToOrchestrator::InternalStateResponse {
+            planet_id: 0,
+            planet_state,
+        }) = res
+        {
+            assert!(
+                planet_state.has_rocket && planet_state.charged_cells_count == 0,
+                "The first sunray received should be used to build a Rocket."
+            );
+        } else {
+            panic!("Unexpected response from planet.");
+        }
+        for _ in 0..5 {
+            tx_orchestrator_to_planet
+                .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
+                .unwrap();
+            let res = rx_planet_to_orchestrator.recv();
+            assert!(matches!(
+                res,
+                Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
+            ));
+        }
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::InternalStateRequest)
+            .unwrap();
+        let res = rx_planet_to_orchestrator.recv();
+        if let Ok(PlanetToOrchestrator::InternalStateResponse {
+            planet_id: 0,
+            planet_state,
+        }) = res
+        {
+            assert!(
+                planet_state.charged_cells_count == planet_state.energy_cells.len(),
+                "All EnergyCells should be charged."
+            );
+        } else {
+            panic!("Unexpected response from planet.");
+        }
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
+            .unwrap();
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
+        ));
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::IncomingExplorerRequest {
+                explorer_id: 0,
+                new_mpsc_sender: tx_planet_to_explorer,
+            })
+            .unwrap();
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::IncomingExplorerResponse {
+                planet_id: 0,
+                res: Ok(())
+            })
+        ));
+        tx_explorer_to_planet
+            .send(ExplorerToPlanet::GenerateResourceRequest {
+                explorer_id: 0,
+                resource: BasicResourceType::Carbon,
+            })
+            .unwrap();
+        let res = rx_planet_to_explorer.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToExplorer::GenerateResourceResponse {
+                resource: Some(BasicResource::Carbon(_))
+            })
+        ));
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::InternalStateRequest)
+            .unwrap();
+        let res = rx_planet_to_orchestrator.recv();
+        if let Ok(PlanetToOrchestrator::InternalStateResponse {
+            planet_id: 0,
+            planet_state,
+        }) = res
+        {
+            assert!(
+                planet_state.charged_cells_count == planet_state.energy_cells.len(),
+                "All EnergyCells are still charged because there was Carbon in storage."
+            );
+        } else {
+            panic!("Unexpected response from planet.");
+        }
+    }
+
+    #[test]
+    fn explorer_to_planet_supported_basic_resources() {
+        todo!()
+    }
+
+    #[test]
+    fn explorer_to_planet_supported_combinations() {
+        todo!()
+    }
+
+    #[test]
+    fn explorer_to_planet_generate_resource() {
+        todo!()
+    }
+
+    #[test]
+    fn explorer_to_planet_combine_resource() {
+        todo!()
+    }
+
+    #[test]
+    fn explorer_to_planet_available_energy_cells() {
+        todo!()
+    }
+
+    #[test]
+    fn orchestrator_to_planet_asteroid() {
+        todo!()
     }
 }
