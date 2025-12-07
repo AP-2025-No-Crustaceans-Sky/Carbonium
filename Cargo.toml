@@ -7,3 +7,6 @@ edition = "2024"
 common-game = { git = "ssh://git@github.com/unitn-ap-2025/common.git" }
 lazy_static = "1.5.0"
 crossbeam-channel = "0.5.15"
+
+[dev-dependencies]
+ntest = "*"

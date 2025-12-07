@@ -22,9 +22,26 @@ macro_rules! payload {
         Payload::from([($payload_key, $payload_value)])
     };
 }
-
 /// Function to create an instance of our migthy and glorious industrial planet Carbonium.
 /// Just pass your id and comunication channels to get started.
+///
+/// # Panics
+/// This function has an unwrap, but it should never panic because the [`PlanetConstraints`] are
+/// hardcoded to be correct.
+///
+/// Example:
+/// ```
+/// let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+/// let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+/// let (_, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+/// let carbonium = carbonium::create_carbonium(
+///     0,
+///     rx_orchestrator_to_planet,
+///     tx_planet_to_orchestrator,
+///     rx_explorer_to_planet,
+/// );
+/// assert!(matches!(carbonium.planet_type(), common_game::components::planet::PlanetType::A));
+/// ```
 #[must_use]
 pub fn create_carbonium(
     id: u32,
@@ -452,11 +469,12 @@ impl PlanetAI for Carbonium {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use common_game::components::forge::Forge;
     use crossbeam_channel::{Receiver, Sender};
     use lazy_static::lazy_static;
+    use ntest::timeout;
     use std::thread;
 
     lazy_static! {
@@ -477,39 +495,28 @@ mod test {
     }
 
     #[test]
-    fn test_create_carbonium() {
-        let (planet, ..) = build_planet();
-        // PlanetType doesn't implement PartialEq, so we can't compare it directly like this:
-        //      planet.planet_type() == PlanetType::A;
-        match planet.planet_type() {
-            PlanetType::A => { /* Test passed */ }
-            _ => panic!("Expected PlanetType::A, found {:?}", planet.planet_type()),
-        }
-    }
-
-    #[test]
-    fn test_carbonium_basic_resources() {
+    fn carbonium_basic_resources() {
         let basic_resources: HashSet<BasicResourceType> = HashSet::from(Carbonium::BASIC_RESOURCES);
         assert!(basic_resources.contains(&BasicResourceType::Carbon));
         assert_eq!(basic_resources.len(), 1);
     }
 
     #[test]
-    fn test_carbonium_complex_resources() {
+    fn carbonium_complex_resources() {
         let complex_resources: HashSet<ComplexResourceType> =
             HashSet::from(Carbonium::COMPLEX_RESOURCES);
         assert!(complex_resources.is_empty());
     }
 
     #[test]
-    fn test_carbonium_ai_initial_state() {
+    fn carbonium_ai_initial_state() {
         let ai = Carbonium::AI;
         assert!(!ai.enabled);
         assert!(ai.storage.is_empty());
     }
 
     #[test]
-    fn test_carbonium_ai_enable_disable() {
+    fn carbonium_ai_enable_disable() {
         let (planet, ..) = build_planet();
         let state = planet.state();
         let mut ai = Carbonium::AI;
@@ -812,31 +819,441 @@ mod test {
 
     #[test]
     fn explorer_to_planet_supported_basic_resources() {
-        todo!()
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (tx_explorer_to_planet, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_explorer, rx_planet_to_explorer) = crossbeam_channel::unbounded();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+
+        thread::spawn(move || carbonium.run());
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+        ));
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::IncomingExplorerRequest {
+                explorer_id: 0,
+                new_mpsc_sender: tx_planet_to_explorer,
+            })
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::IncomingExplorerResponse {
+                planet_id: 0,
+                res: Ok(())
+            })
+        ));
+
+        tx_explorer_to_planet
+            .send(ExplorerToPlanet::SupportedResourceRequest { explorer_id: 0 })
+            .unwrap();
+
+        let res = rx_planet_to_explorer.recv();
+        if let Ok(PlanetToExplorer::SupportedResourceResponse { resource_list }) = res {
+            assert_eq!(
+                resource_list,
+                HashSet::from([BasicResourceType::Carbon]),
+                "Only Carbon is supported."
+            );
+        } else {
+            panic!("Unexpected response from planet.");
+        }
     }
 
     #[test]
     fn explorer_to_planet_supported_combinations() {
-        todo!()
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (tx_explorer_to_planet, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_explorer, rx_planet_to_explorer) = crossbeam_channel::unbounded();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+
+        thread::spawn(move || carbonium.run());
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+        ));
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::IncomingExplorerRequest {
+                explorer_id: 0,
+                new_mpsc_sender: tx_planet_to_explorer,
+            })
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::IncomingExplorerResponse {
+                planet_id: 0,
+                res: Ok(())
+            })
+        ));
+
+        tx_explorer_to_planet
+            .send(ExplorerToPlanet::SupportedCombinationRequest { explorer_id: 0 })
+            .unwrap();
+
+        let res = rx_planet_to_explorer.recv();
+        if let Ok(PlanetToExplorer::SupportedCombinationResponse { combination_list }) = res {
+            assert_eq!(
+                combination_list,
+                HashSet::new(),
+                "No ComplexResource is supported."
+            );
+        } else {
+            panic!("Unexpected response from planet.");
+        }
     }
 
     #[test]
     fn explorer_to_planet_generate_resource() {
-        todo!()
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (tx_explorer_to_planet, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_explorer, rx_planet_to_explorer) = crossbeam_channel::unbounded();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+
+        thread::spawn(move || carbonium.run());
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+        ));
+
+        for _ in 0..2 {
+            tx_orchestrator_to_planet
+                .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
+                .unwrap();
+
+            let res = rx_planet_to_orchestrator.recv();
+            assert!(matches!(
+                res,
+                Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
+            ));
+        }
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::IncomingExplorerRequest {
+                explorer_id: 0,
+                new_mpsc_sender: tx_planet_to_explorer,
+            })
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::IncomingExplorerResponse {
+                planet_id: 0,
+                res: Ok(())
+            })
+        ));
+
+        tx_explorer_to_planet
+            .send(ExplorerToPlanet::GenerateResourceRequest {
+                explorer_id: 0,
+                resource: BasicResourceType::Carbon,
+            })
+            .unwrap();
+
+        let res = rx_planet_to_explorer.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToExplorer::GenerateResourceResponse {
+                resource: Some(BasicResource::Carbon(_))
+            })
+        ));
+
+        let other_resources = [
+            BasicResourceType::Hydrogen,
+            BasicResourceType::Silicon,
+            BasicResourceType::Oxygen,
+        ];
+        for item in other_resources {
+            tx_explorer_to_planet
+                .send(ExplorerToPlanet::GenerateResourceRequest {
+                    explorer_id: 0,
+                    resource: item,
+                })
+                .unwrap();
+
+            let res = rx_planet_to_explorer.recv();
+            assert!(matches!(
+                res,
+                Ok(PlanetToExplorer::GenerateResourceResponse { resource: None })
+            ));
+        }
     }
 
     #[test]
     fn explorer_to_planet_combine_resource() {
-        todo!()
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (tx_explorer_to_planet, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_explorer, rx_planet_to_explorer) = crossbeam_channel::unbounded();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+
+        thread::spawn(move || carbonium.run());
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+        ));
+
+        for _ in 0..3 {
+            tx_orchestrator_to_planet
+                .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
+                .unwrap();
+
+            let res = rx_planet_to_orchestrator.recv();
+            assert!(matches!(
+                res,
+                Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
+            ));
+        }
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::IncomingExplorerRequest {
+                explorer_id: 0,
+                new_mpsc_sender: tx_planet_to_explorer,
+            })
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::IncomingExplorerResponse {
+                planet_id: 0,
+                res: Ok(())
+            })
+        ));
+
+        let mut carbons = Vec::new();
+        for _ in 0..2 {
+            tx_explorer_to_planet
+                .send(ExplorerToPlanet::GenerateResourceRequest {
+                    explorer_id: 0,
+                    resource: BasicResourceType::Carbon,
+                })
+                .unwrap();
+
+            let res = rx_planet_to_explorer.recv();
+            if let Ok(PlanetToExplorer::GenerateResourceResponse {
+                resource: Some(BasicResource::Carbon(carbon)),
+            }) = res
+            {
+                carbons.push(carbon);
+            }
+        }
+
+        tx_explorer_to_planet
+            .send(ExplorerToPlanet::CombineResourceRequest {
+                explorer_id: 0,
+                msg: ComplexResourceRequest::Diamond(
+                    carbons.pop().unwrap(),
+                    carbons.pop().unwrap(),
+                ),
+            })
+            .unwrap();
+
+        let res = rx_planet_to_explorer.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToExplorer::CombineResourceResponse {
+                complex_response: Err((
+                    _,
+                    GenericResource::BasicResources(BasicResource::Carbon(_)),
+                    GenericResource::BasicResources(BasicResource::Carbon(_))
+                ))
+            })
+        ));
     }
 
     #[test]
     fn explorer_to_planet_available_energy_cells() {
-        todo!()
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (tx_explorer_to_planet, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_explorer, rx_planet_to_explorer) = crossbeam_channel::unbounded();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+
+        thread::spawn(move || carbonium.run());
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+        ));
+
+        for _ in 0..3 {
+            tx_orchestrator_to_planet
+                .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
+                .unwrap();
+
+            let res = rx_planet_to_orchestrator.recv();
+            assert!(matches!(
+                res,
+                Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
+            ));
+        }
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::IncomingExplorerRequest {
+                explorer_id: 0,
+                new_mpsc_sender: tx_planet_to_explorer,
+            })
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::IncomingExplorerResponse {
+                planet_id: 0,
+                res: Ok(())
+            })
+        ));
+
+        tx_explorer_to_planet
+            .send(ExplorerToPlanet::AvailableEnergyCellRequest { explorer_id: 0 })
+            .unwrap();
+
+        let res = rx_planet_to_explorer.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToExplorer::AvailableEnergyCellResponse { available_cells: 2 })
+        ));
     }
 
     #[test]
+    #[timeout(500)]
     fn orchestrator_to_planet_asteroid() {
-        todo!()
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (_, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+
+        let thread = thread::spawn(move || carbonium.run());
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+        ));
+
+        for _ in 0..2 {
+            tx_orchestrator_to_planet
+                .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
+                .unwrap();
+
+            let res = rx_planet_to_orchestrator.recv();
+            assert!(matches!(
+                res,
+                Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
+            ));
+        }
+
+        // First you the already available Rocket, then build one on the fly.
+        for _ in 0..2 {
+            tx_orchestrator_to_planet
+                .send(OrchestratorToPlanet::Asteroid(FORGE.generate_asteroid()))
+                .unwrap();
+
+            let res = rx_planet_to_orchestrator.recv();
+            assert!(matches!(
+                res,
+                Ok(PlanetToOrchestrator::AsteroidAck {
+                    planet_id: 0,
+                    rocket: Some(_)
+                })
+            ));
+        }
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::Asteroid(FORGE.generate_asteroid()))
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::AsteroidAck {
+                planet_id: 0,
+                rocket: None
+            })
+        ));
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::KillPlanet)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(matches!(
+            res,
+            Ok(PlanetToOrchestrator::KillPlanetResult { planet_id: 0 })
+        ));
+
+        assert!(matches!(thread.join(), Ok(_)));
     }
 }
