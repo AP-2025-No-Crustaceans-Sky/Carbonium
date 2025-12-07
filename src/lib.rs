@@ -57,6 +57,7 @@ struct Carbonium {
     storage: Vec<Carbon>,
     enabled: bool,
 }
+
 impl Carbonium {
     const PLANET_TYPE: PlanetType = PlanetType::A;
     const BASIC_RESOURCES: [BasicResourceType; 1] = [BasicResourceType::Carbon];
@@ -66,6 +67,7 @@ impl Carbonium {
         enabled: false,
     };
 }
+
 impl PlanetAI for Carbonium {
     fn handle_orchestrator_msg(
         &mut self,
@@ -208,6 +210,7 @@ impl PlanetAI for Carbonium {
                         String::from("PlanetStateResponse"),
                         String::from("PlanetState returned.")
                     );
+
                     Some(PlanetToOrchestrator::InternalStateResponse {
                         planet_id: state.id(),
                         planet_state: state.to_dummy(),
@@ -238,9 +241,11 @@ impl PlanetAI for Carbonium {
                 String::from("PlanetAI"),
                 String::from("PlanetAI is stopped.")
             );
+
             None
         }
     }
+
     fn handle_explorer_msg(
         &mut self,
         state: &mut PlanetState,
@@ -262,6 +267,7 @@ impl PlanetAI for Carbonium {
                         String::from("BasicResourcesResponse"),
                         format!("{:?}", Self::BASIC_RESOURCES)
                     );
+
                     Some(PlanetToExplorer::SupportedResourceResponse {
                         resource_list: HashSet::from(Self::BASIC_RESOURCES),
                     })
@@ -277,6 +283,7 @@ impl PlanetAI for Carbonium {
                         String::from("ComplexResourcesResponse"),
                         String::from("No ComplexResource supported.")
                     );
+
                     Some(PlanetToExplorer::SupportedCombinationResponse {
                         combination_list: HashSet::new(),
                     })
@@ -299,6 +306,7 @@ impl PlanetAI for Carbonium {
                                 String::from("GenerateResourceResponse"),
                                 String::from("Carbon popped from storage.")
                             );
+
                             Some(PlanetToExplorer::GenerateResourceResponse {
                                 resource: Some(BasicResource::Carbon(carbon)),
                             })
@@ -315,6 +323,7 @@ impl PlanetAI for Carbonium {
                                 String::from("GenerateResourceResponse"),
                                 String::from("Carbon created from EnergyCell.")
                             );
+
                             Some(PlanetToExplorer::GenerateResourceResponse {
                                 resource: Some(BasicResource::Carbon(carbon)),
                             })
@@ -329,6 +338,7 @@ impl PlanetAI for Carbonium {
                                 String::from("GenerateResourceResponse"),
                                 String::from("Storage is empty and no EnergyCell is charged.")
                             );
+
                             Some(PlanetToExplorer::GenerateResourceResponse { resource: None })
                         }
                     } else {
@@ -342,6 +352,7 @@ impl PlanetAI for Carbonium {
                             String::from("GenerateResourceResponse"),
                             format!("{resource:?} not supported.")
                         );
+
                         Some(PlanetToExplorer::GenerateResourceResponse { resource: None })
                     }
                 }
@@ -372,6 +383,7 @@ impl PlanetAI for Carbonium {
                             GenericResource::ComplexResources(ComplexResource::Diamond(diamond)),
                         ),
                     };
+
                     log_event!(
                         ActorType::Planet,
                         state.id(),
@@ -382,6 +394,7 @@ impl PlanetAI for Carbonium {
                         String::from("CombineResourceResponse"),
                         String::from("ComplexResources are not supported.")
                     );
+
                     Some(PlanetToExplorer::CombineResourceResponse {
                         complex_response: Err((
                             String::from("Not supported"),
@@ -398,6 +411,7 @@ impl PlanetAI for Carbonium {
                             acc
                         }
                     });
+
                     log_event!(
                         ActorType::Planet,
                         state.id(),
@@ -412,6 +426,7 @@ impl PlanetAI for Carbonium {
                             state.cells_count()
                         )
                     );
+
                     Some(PlanetToExplorer::AvailableEnergyCellResponse {
                         available_cells: charged_cells,
                     })
@@ -428,9 +443,11 @@ impl PlanetAI for Carbonium {
                 String::from("PlanetAI"),
                 String::from("PlanetAI is stopped.")
             );
+
             None
         }
     }
+
     fn handle_asteroid(
         &mut self,
         state: &mut PlanetState,
@@ -448,6 +465,7 @@ impl PlanetAI for Carbonium {
                 String::from("PlanetAI"),
                 String::from("PlanetAI is stopped.")
             );
+
             None
         } else if state.has_rocket() {
             log_event!(
@@ -460,6 +478,7 @@ impl PlanetAI for Carbonium {
                 String::from("AsteroidAck"),
                 String::from("Rocket was ready and used.")
             );
+
             state.take_rocket()
         } else {
             // If I don't have a Rocket right now, try to build it.
@@ -475,6 +494,7 @@ impl PlanetAI for Carbonium {
                     String::from("AsteroidAck"),
                     String::from("EnergyCell used to build Rocket and then used.")
                 );
+
                 state.take_rocket()
             } else {
                 log_event!(
@@ -489,10 +509,12 @@ impl PlanetAI for Carbonium {
                         "No Rocket or charged EnergyCell is available. The Planet will be destroyed."
                     )
                 );
+                
                 None
             }
         }
     }
+
     fn start(&mut self, state: &PlanetState) {
         log_event!(
             ActorType::Planet,
@@ -506,6 +528,7 @@ impl PlanetAI for Carbonium {
         );
         self.enabled = true;
     }
+
     fn stop(&mut self, state: &PlanetState) {
         log_event!(
             ActorType::Planet,
@@ -610,18 +633,23 @@ mod test {
             tx_planet_to_orchestrator,
             rx_explorer_to_planet,
         );
+
         thread::spawn(move || carbonium.run());
+
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::StartPlanetAI)
             .unwrap();
-        /* let res = rx_planet_to_orchestrator.recv();
+
+        let res = rx_planet_to_orchestrator.recv();
         assert!(matches!(
             res,
             Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
-        ));  FIX: Shouldn't we receive an acknowlegment? */
+        )); // FIX: Shouldn't we receive an acknowledgment?
+
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::InternalStateRequest)
             .unwrap();
+
         let res = rx_planet_to_orchestrator.recv();
         if let Ok(PlanetToOrchestrator::InternalStateResponse {
             planet_id: 0,
@@ -636,6 +664,7 @@ mod test {
             panic!("Unexpected response from planet.");
         }
     }
+
     #[test]
     fn orchestrator_to_planet_sunray() {
         let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
@@ -648,26 +677,33 @@ mod test {
             tx_planet_to_orchestrator,
             rx_explorer_to_planet,
         );
+
         thread::spawn(move || carbonium.run());
+
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::StartPlanetAI)
             .unwrap();
-        /* let res = rx_planet_to_orchestrator.recv();
+
+        let res = rx_planet_to_orchestrator.recv();
         assert!(matches!(
             res,
             Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
-        ));  FIX: Shouldn't we receive an acknowlegment? */
+        )); // FIX: Shouldn't we receive an acknowledgment?
+
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
             .unwrap();
+
         let res = rx_planet_to_orchestrator.recv();
         assert!(matches!(
             res,
             Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
         ));
+
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::InternalStateRequest)
             .unwrap();
+
         let res = rx_planet_to_orchestrator.recv();
         if let Ok(PlanetToOrchestrator::InternalStateResponse {
             planet_id: 0,
@@ -681,19 +717,23 @@ mod test {
         } else {
             panic!("Unexpected response from planet.");
         }
+
         for _ in 0..5 {
             tx_orchestrator_to_planet
                 .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
                 .unwrap();
+
             let res = rx_planet_to_orchestrator.recv();
             assert!(matches!(
                 res,
                 Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
             ));
         }
+
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::InternalStateRequest)
             .unwrap();
+
         let res = rx_planet_to_orchestrator.recv();
         if let Ok(PlanetToOrchestrator::InternalStateResponse {
             planet_id: 0,
@@ -707,20 +747,24 @@ mod test {
         } else {
             panic!("Unexpected response from planet.");
         }
+
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
             .unwrap();
+
         let res = rx_planet_to_orchestrator.recv();
         assert!(matches!(
             res,
             Ok(PlanetToOrchestrator::SunrayAck { planet_id: 0 })
         ));
+
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::IncomingExplorerRequest {
                 explorer_id: 0,
                 new_mpsc_sender: tx_planet_to_explorer,
             })
             .unwrap();
+
         let res = rx_planet_to_orchestrator.recv();
         assert!(matches!(
             res,
@@ -729,12 +773,14 @@ mod test {
                 res: Ok(())
             })
         ));
+
         tx_explorer_to_planet
             .send(ExplorerToPlanet::GenerateResourceRequest {
                 explorer_id: 0,
                 resource: BasicResourceType::Carbon,
             })
             .unwrap();
+
         let res = rx_planet_to_explorer.recv();
         assert!(matches!(
             res,
@@ -742,9 +788,11 @@ mod test {
                 resource: Some(BasicResource::Carbon(_))
             })
         ));
+
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::InternalStateRequest)
             .unwrap();
+
         let res = rx_planet_to_orchestrator.recv();
         if let Ok(PlanetToOrchestrator::InternalStateResponse {
             planet_id: 0,
