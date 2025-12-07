@@ -1,4 +1,6 @@
-use std::{collections::HashSet, sync::mpsc};
+use std::collections::HashSet;
+
+use crossbeam_channel::{Sender, Receiver};
 
 use common_game::{
     components::{
@@ -35,9 +37,9 @@ macro_rules! log_event {
 #[must_use]
 pub fn create_carbonium(
     id: u32,
-    rx_orchestrator: mpsc::Receiver<OrchestratorToPlanet>,
-    tx_orchestrator: mpsc::Sender<PlanetToOrchestrator>,
-    rx_explorer: mpsc::Receiver<ExplorerToPlanet>,
+    rx_orchestrator: Receiver<OrchestratorToPlanet>,
+    tx_orchestrator: Sender<PlanetToOrchestrator>,
+    rx_explorer: Receiver<ExplorerToPlanet>,
 ) -> Planet {
     Planet::new(
         id,
@@ -522,9 +524,9 @@ impl PlanetAI for Carbonium {
 #[cfg(test)]
 mod test {
     use super::*;
-    use common_game::components::forge::Forge;
+    use common_game::components::{forge::Forge};
     use lazy_static::lazy_static;
-    use std::sync::mpsc::{Receiver, Sender};
+    use crossbeam_channel::{Sender, Receiver};
     use std::thread;
 
     lazy_static! {
@@ -537,9 +539,9 @@ mod test {
         Receiver<PlanetToOrchestrator>,
         Sender<ExplorerToPlanet>,
     ) {
-        let (tx_rx_orch_planet, rx_orch_planet) = mpsc::channel();
-        let (tx_planet_orch, rx_planet_orch) = mpsc::channel();
-        let (tx_expl_planet, rx_expl_planet) = mpsc::channel();
+        let (tx_rx_orch_planet, rx_orch_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_orch, rx_planet_orch) = crossbeam_channel::unbounded();
+        let (tx_expl_planet, rx_expl_planet) = crossbeam_channel::unbounded();
         let planet = create_carbonium(1, rx_orch_planet, tx_planet_orch, rx_expl_planet);
         (planet, tx_rx_orch_planet, rx_planet_orch, tx_expl_planet)
     }
@@ -599,9 +601,9 @@ mod test {
 
     #[test]
     fn orchestrator_to_planet_state_request() {
-        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = mpsc::channel();
-        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = mpsc::channel();
-        let (_, rx_explorer_to_planet) = mpsc::channel();
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (_, rx_explorer_to_planet) = crossbeam_channel::unbounded();
         let mut carbonium = create_carbonium(
             0,
             rx_orchestrator_to_planet,
@@ -636,10 +638,10 @@ mod test {
     }
     #[test]
     fn orchestrator_to_planet_sunray() {
-        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = mpsc::channel();
-        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = mpsc::channel();
-        let (tx_explorer_to_planet, rx_explorer_to_planet) = mpsc::channel();
-        let (tx_planet_to_explorer, rx_planet_to_explorer) = mpsc::channel();
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (tx_explorer_to_planet, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_explorer, rx_planet_to_explorer) = crossbeam_channel::unbounded();
         let mut carbonium = create_carbonium(
             0,
             rx_orchestrator_to_planet,
