@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crossbeam_channel::{Sender, Receiver};
+use crossbeam_channel::{Receiver, Sender};
 
 use common_game::{
     components::{
@@ -17,18 +17,9 @@ use common_game::{
     },
 };
 
-macro_rules! log_event {
-    ($source_actor:expr, $source_id:expr, $dest_actor:expr, $dest_id:expr, $event_type:expr, $channel:expr, $payload_key:expr, $payload_value:expr) => {
-        LogEvent::new(
-            $source_actor,
-            $source_id,
-            $dest_actor,
-            $dest_id,
-            $event_type,
-            $channel,
-            Payload::from([($payload_key, $payload_value)]),
-        )
-        .emit();
+macro_rules! payload {
+    ($payload_key:expr, $payload_value:expr) => {
+        Payload::from([($payload_key, $payload_value)])
     };
 }
 
@@ -76,6 +67,15 @@ impl PlanetAI for Carbonium {
         _: &Combinator,
         msg: OrchestratorToPlanet,
     ) -> Option<PlanetToOrchestrator> {
+        let mut log_event = LogEvent::new(
+            ActorType::Planet,
+            state.id(),
+            ActorType::Orchestrator,
+            String::from("Master"),
+            EventType::MessagePlanetToOrchestrator,
+            Channel::Debug,
+            payload!(String::new(), String::new()),
+        );
         if self.enabled {
             match msg {
                 OrchestratorToPlanet::Sunray(sunray) => {
@@ -84,50 +84,36 @@ impl PlanetAI for Carbonium {
                         if let Some((energy_cell, _)) = state.empty_cell() {
                             // Charge the EnergyCell.
                             energy_cell.charge(sunray);
-                            log_event!(
-                                ActorType::Planet,
-                                state.id(),
-                                ActorType::Orchestrator,
-                                String::from("Master"),
-                                EventType::MessagePlanetToOrchestrator,
-                                Channel::Debug,
+                            log_event.payload = payload!(
                                 String::from("SunrayAck"),
                                 String::from(
                                     "Has Rocket and Uncharged EnergyCell found. Sunray consumed to charge an EnergyCell.",
                                 )
                             );
+                            log_event.emit();
                         } else if let Some((energy_cell, _)) = state.full_cell()
                             && let Ok(carbon) = generator.make_carbon(energy_cell)
                         {
                             // Consume the EnergyCell to produce Carbon for storage and charge it.
                             self.storage.push(carbon);
                             energy_cell.charge(sunray);
-                            log_event!(
-                                ActorType::Planet,
-                                state.id(),
-                                ActorType::Orchestrator,
-                                String::from("Master"),
-                                EventType::MessagePlanetToOrchestrator,
-                                Channel::Debug,
+                            log_event.payload = payload!(
                                 String::from("SunrayAck"),
                                 String::from(
                                     "Has Rocket and Uncharged EnergyCell not found. Generated Carbon and stored it then consumed the Sunray to charge an EnergyCell.",
                                 )
                             );
+                            log_event.emit();
                         } else {
                             // Something went wrong.
-                            log_event!(
-                                ActorType::Planet,
-                                state.id(),
-                                ActorType::Orchestrator,
-                                String::from("Master"),
-                                EventType::MessagePlanetToOrchestrator,
-                                Channel::Error,
+                            log_event.channel = Channel::Error;
+                            log_event.payload = payload!(
                                 String::from("SunrayAck"),
                                 String::from(
                                     "No Rocket and Uncharged EnergyCell found and not found. This should't ever happen.",
                                 )
                             );
+                            log_event.emit();
                         }
                     } else {
                         // Focus on building a Rocket.
@@ -135,64 +121,46 @@ impl PlanetAI for Carbonium {
                             // Charge the EnergyCell and consume it.
                             energy_cell.charge(sunray);
                             let _ = state.build_rocket(i);
-                            log_event!(
-                                ActorType::Planet,
-                                state.id(),
-                                ActorType::Orchestrator,
-                                String::from("Master"),
-                                EventType::MessagePlanetToOrchestrator,
-                                Channel::Debug,
+                            log_event.payload = payload!(
                                 String::from("SunrayAck"),
                                 String::from(
                                     "No Rocket and Uncharged EnergyCell found. Sunray consumed to charge an EnergyCell then build a Rocket.",
                                 )
                             );
+                            log_event.emit();
                         } else if let Some((_, i)) = state.full_cell() {
                             // Consume the EnergyCell and charge it.
                             let _ = state.build_rocket(i);
                             if let Some((energy_cell, _)) = state.empty_cell() {
                                 energy_cell.charge(sunray);
-                                log_event!(
-                                    ActorType::Planet,
-                                    state.id(),
-                                    ActorType::Orchestrator,
-                                    String::from("Master"),
-                                    EventType::MessagePlanetToOrchestrator,
-                                    Channel::Debug,
+                                log_event.payload = payload!(
                                     String::from("SunrayAck"),
                                     String::from(
                                         "No Rocket and Uncharged EnergyCell not found. Built a Rocket then consumed the Sunray to charge an EnergyCell.",
                                     )
                                 );
+                                log_event.emit();
                             } else {
                                 // Something went wrong.
-                                log_event!(
-                                    ActorType::Planet,
-                                    state.id(),
-                                    ActorType::Orchestrator,
-                                    String::from("Master"),
-                                    EventType::MessagePlanetToOrchestrator,
-                                    Channel::Error,
+                                log_event.channel = Channel::Error;
+                                log_event.payload = payload!(
                                     String::from("SunrayAck"),
                                     String::from(
                                         "No Rocket and Uncharged EnergyCell found and not found. This should't ever happen.",
                                     )
                                 );
+                                log_event.emit();
                             }
                         } else {
                             // Something went wrong.
-                            log_event!(
-                                ActorType::Planet,
-                                state.id(),
-                                ActorType::Orchestrator,
-                                String::from("Master"),
-                                EventType::MessagePlanetToOrchestrator,
-                                Channel::Error,
+                            log_event.channel = Channel::Error;
+                            log_event.payload = payload!(
                                 String::from("SunrayAck"),
                                 String::from(
                                     "No Rocket and Uncharged EnergyCell found and not found. This should't ever happen.",
                                 )
                             );
+                            log_event.emit();
                         }
                     }
                     Some(PlanetToOrchestrator::SunrayAck {
@@ -200,95 +168,79 @@ impl PlanetAI for Carbonium {
                     })
                 }
                 OrchestratorToPlanet::InternalStateRequest => {
-                    log_event!(
-                        ActorType::Planet,
-                        state.id(),
-                        ActorType::Orchestrator,
-                        String::from("Master"),
-                        EventType::MessagePlanetToOrchestrator,
-                        Channel::Debug,
+                    log_event.payload = payload!(
                         String::from("PlanetStateResponse"),
                         String::from("PlanetState returned.")
                     );
-
+                    log_event.emit();
                     Some(PlanetToOrchestrator::InternalStateResponse {
                         planet_id: state.id(),
                         planet_state: state.to_dummy(),
                     })
                 }
                 _ => {
-                    log_event!(
-                        ActorType::Planet,
-                        state.id(),
-                        ActorType::Orchestrator,
-                        String::from("Master"),
-                        EventType::MessageOrchestratorToPlanet,
-                        Channel::Error,
+                    log_event.channel = Channel::Error;
+                    log_event.payload = payload!(
                         String::from("OrchestratorMessageHandler"),
                         String::from("Unexpected type of message received.")
                     );
+                    log_event.emit();
                     None
                 }
             }
         } else {
-            log_event!(
-                ActorType::Planet,
-                state.id(),
-                ActorType::Orchestrator,
-                String::from("Master"),
-                EventType::MessagePlanetToOrchestrator,
-                Channel::Info,
+            log_event.channel = Channel::Info;
+            log_event.payload = payload!(
                 String::from("PlanetAI"),
                 String::from("PlanetAI is stopped.")
             );
-
-            None
+            log_event.emit();
+            Some(PlanetToOrchestrator::Stopped {
+                planet_id: state.id(),
+            })
         }
     }
 
     fn handle_explorer_msg(
         &mut self,
         state: &mut PlanetState,
-        generator: &Generator, // I am not sure why these are arguments, and not defined by me.
-        // What if the wrong Generator is passed?
-        _: &Combinator, // Same as above.
+        generator: &Generator,
+        _: &Combinator,
         msg: ExplorerToPlanet,
     ) -> Option<PlanetToExplorer> {
+        let mut log_event = LogEvent::new(
+            ActorType::Planet,
+            state.id(),
+            ActorType::Explorer,
+            String::from("Any"),
+            EventType::MessagePlanetToExplorer,
+            Channel::Debug,
+            payload!(String::new(), String::new()),
+        );
         if self.enabled {
             match msg {
                 ExplorerToPlanet::SupportedResourceRequest { explorer_id } => {
-                    log_event!(
-                        ActorType::Planet,
-                        state.id(),
-                        ActorType::Explorer,
-                        format!("{explorer_id}"),
-                        EventType::MessagePlanetToExplorer,
-                        Channel::Debug,
+                    log_event.receiver_id = format!("{explorer_id}");
+                    log_event.payload = payload!(
                         String::from("BasicResourcesResponse"),
                         format!("{:?}", Self::BASIC_RESOURCES)
                     );
-
+                    log_event.emit();
                     Some(PlanetToExplorer::SupportedResourceResponse {
                         resource_list: HashSet::from(Self::BASIC_RESOURCES),
                     })
                 }
                 ExplorerToPlanet::SupportedCombinationRequest { explorer_id } => {
-                    log_event!(
-                        ActorType::Planet,
-                        state.id(),
-                        ActorType::Explorer,
-                        format!("{explorer_id}"),
-                        EventType::MessagePlanetToExplorer,
-                        Channel::Debug,
+                    log_event.receiver_id = format!("{explorer_id}");
+                    log_event.payload = payload!(
                         String::from("ComplexResourcesResponse"),
                         String::from("No ComplexResource supported.")
                     );
-
+                    log_event.emit();
                     Some(PlanetToExplorer::SupportedCombinationResponse {
                         combination_list: HashSet::new(),
                     })
                 }
-
                 ExplorerToPlanet::GenerateResourceRequest {
                     explorer_id,
                     resource,
@@ -296,63 +248,43 @@ impl PlanetAI for Carbonium {
                     if resource == BasicResourceType::Carbon {
                         // If there is Carbon in the storage return that otherwise try to build it.
                         if let Some(carbon) = self.storage.pop() {
-                            log_event!(
-                                ActorType::Planet,
-                                state.id(),
-                                ActorType::Explorer,
-                                format!("{explorer_id}"),
-                                EventType::MessagePlanetToExplorer,
-                                Channel::Debug,
+                            log_event.receiver_id = format!("{explorer_id}");
+                            log_event.payload = payload!(
                                 String::from("GenerateResourceResponse"),
                                 String::from("Carbon popped from storage.")
                             );
-
+                            log_event.emit();
                             Some(PlanetToExplorer::GenerateResourceResponse {
                                 resource: Some(BasicResource::Carbon(carbon)),
                             })
                         } else if let Some((energy_cell, _)) = state.full_cell()
                             && let Ok(carbon) = generator.make_carbon(energy_cell)
                         {
-                            log_event!(
-                                ActorType::Planet,
-                                state.id(),
-                                ActorType::Explorer,
-                                format!("{explorer_id}"),
-                                EventType::MessagePlanetToExplorer,
-                                Channel::Debug,
+                            log_event.receiver_id = format!("{explorer_id}");
+                            log_event.payload = payload!(
                                 String::from("GenerateResourceResponse"),
                                 String::from("Carbon created from EnergyCell.")
                             );
-
+                            log_event.emit();
                             Some(PlanetToExplorer::GenerateResourceResponse {
                                 resource: Some(BasicResource::Carbon(carbon)),
                             })
                         } else {
-                            log_event!(
-                                ActorType::Planet,
-                                state.id(),
-                                ActorType::Explorer,
-                                format!("{explorer_id}"),
-                                EventType::MessagePlanetToExplorer,
-                                Channel::Debug,
+                            log_event.receiver_id = format!("{explorer_id}");
+                            log_event.payload = payload!(
                                 String::from("GenerateResourceResponse"),
                                 String::from("Storage is empty and no EnergyCell is charged.")
                             );
-
+                            log_event.emit();
                             Some(PlanetToExplorer::GenerateResourceResponse { resource: None })
                         }
                     } else {
-                        log_event!(
-                            ActorType::Planet,
-                            state.id(),
-                            ActorType::Explorer,
-                            format!("{explorer_id}"),
-                            EventType::MessagePlanetToExplorer,
-                            Channel::Debug,
+                        log_event.receiver_id = format!("{explorer_id}");
+                        log_event.payload = payload!(
                             String::from("GenerateResourceResponse"),
                             format!("{resource:?} not supported.")
                         );
-
+                        log_event.emit();
                         Some(PlanetToExplorer::GenerateResourceResponse { resource: None })
                     }
                 }
@@ -383,18 +315,12 @@ impl PlanetAI for Carbonium {
                             GenericResource::ComplexResources(ComplexResource::Diamond(diamond)),
                         ),
                     };
-
-                    log_event!(
-                        ActorType::Planet,
-                        state.id(),
-                        ActorType::Explorer,
-                        format!("{explorer_id}"),
-                        EventType::MessagePlanetToExplorer,
-                        Channel::Debug,
+                    log_event.receiver_id = format!("{explorer_id}");
+                    log_event.payload = payload!(
                         String::from("CombineResourceResponse"),
                         String::from("ComplexResources are not supported.")
                     );
-
+                    log_event.emit();
                     Some(PlanetToExplorer::CombineResourceResponse {
                         complex_response: Err((
                             String::from("Not supported"),
@@ -411,14 +337,8 @@ impl PlanetAI for Carbonium {
                             acc
                         }
                     });
-
-                    log_event!(
-                        ActorType::Planet,
-                        state.id(),
-                        ActorType::Explorer,
-                        format!("{explorer_id}"),
-                        EventType::MessagePlanetToExplorer,
-                        Channel::Debug,
+                    log_event.receiver_id = format!("{explorer_id}");
+                    log_event.payload = payload!(
                         String::from("AvailableEnergyCellResponse"),
                         format!(
                             "{}/{} EnergyCells are charged.",
@@ -426,25 +346,20 @@ impl PlanetAI for Carbonium {
                             state.cells_count()
                         )
                     );
-
+                    log_event.emit();
                     Some(PlanetToExplorer::AvailableEnergyCellResponse {
                         available_cells: charged_cells,
                     })
                 }
             }
         } else {
-            log_event!(
-                ActorType::Planet,
-                state.id(),
-                ActorType::Explorer,
-                String::from("Any"),
-                EventType::MessagePlanetToExplorer,
-                Channel::Info,
+            log_event.channel = Channel::Info;
+            log_event.payload = payload!(
                 String::from("PlanetAI"),
                 String::from("PlanetAI is stopped.")
             );
-
-            None
+            log_event.emit();
+            Some(PlanetToExplorer::Stopped {})
         }
     }
 
@@ -454,92 +369,84 @@ impl PlanetAI for Carbonium {
         _: &Generator,
         _: &Combinator,
     ) -> Option<Rocket> {
+        let mut log_event = LogEvent::new(
+            ActorType::Planet,
+            state.id(),
+            ActorType::Orchestrator,
+            String::from("Master"),
+            EventType::MessagePlanetToOrchestrator,
+            Channel::Debug,
+            payload!(String::new(), String::new()),
+        );
         if !self.enabled {
-            log_event!(
-                ActorType::Planet,
-                state.id(),
-                ActorType::Orchestrator,
-                String::from("Master"),
-                EventType::MessagePlanetToOrchestrator,
-                Channel::Info,
+            log_event.channel = Channel::Info;
+            log_event.payload = payload!(
                 String::from("PlanetAI"),
                 String::from("PlanetAI is stopped.")
             );
-
+            log_event.emit();
             None
         } else if state.has_rocket() {
-            log_event!(
-                ActorType::Planet,
-                state.id(),
-                ActorType::Orchestrator,
-                String::from("Master"),
-                EventType::MessagePlanetToOrchestrator,
-                Channel::Debug,
+            log_event.payload = payload!(
                 String::from("AsteroidAck"),
                 String::from("Rocket was ready and used.")
             );
-
+            log_event.emit();
             state.take_rocket()
         } else {
             // If I don't have a Rocket right now, try to build it.
             if let Some((_, i)) = state.full_cell() {
                 let _ = state.build_rocket(i);
-                log_event!(
-                    ActorType::Planet,
-                    state.id(),
-                    ActorType::Orchestrator,
-                    String::from("Master"),
-                    EventType::MessagePlanetToOrchestrator,
-                    Channel::Debug,
+                log_event.payload = payload!(
                     String::from("AsteroidAck"),
                     String::from("EnergyCell used to build Rocket and then used.")
                 );
-
+                log_event.emit();
                 state.take_rocket()
             } else {
-                log_event!(
-                    ActorType::Planet,
-                    state.id(),
-                    ActorType::Orchestrator,
-                    String::from("Master"),
-                    EventType::MessagePlanetToOrchestrator,
-                    Channel::Debug,
+                log_event.payload = payload!(
                     String::from("AsteroidAck"),
                     String::from(
                         "No Rocket or charged EnergyCell is available. The Planet will be destroyed."
                     )
                 );
-                
+                log_event.emit();
                 None
             }
         }
     }
 
     fn start(&mut self, state: &PlanetState) {
-        log_event!(
+        LogEvent::new(
             ActorType::Planet,
             state.id(),
             ActorType::Orchestrator,
             String::from("Master"),
             EventType::MessagePlanetToOrchestrator,
             Channel::Debug,
-            String::from("PlanetAI"),
-            String::from("PlanetAI is now starting.")
-        );
+            payload!(
+                String::from("PlanetAI"),
+                String::from("PlanetAI is now starting.")
+            ),
+        )
+        .emit();
         self.enabled = true;
     }
 
     fn stop(&mut self, state: &PlanetState) {
-        log_event!(
+        LogEvent::new(
             ActorType::Planet,
             state.id(),
             ActorType::Orchestrator,
             String::from("Master"),
             EventType::MessagePlanetToOrchestrator,
             Channel::Debug,
-            String::from("PlanetAI"),
-            String::from("PlanetAI is now stopping.")
-        );
+            payload!(
+                String::from("PlanetAI"),
+                String::from("PlanetAI is now stopping.")
+            ),
+        )
+        .emit();
         self.enabled = false;
     }
 }
@@ -547,9 +454,9 @@ impl PlanetAI for Carbonium {
 #[cfg(test)]
 mod test {
     use super::*;
-    use common_game::components::{forge::Forge};
+    use common_game::components::forge::Forge;
+    use crossbeam_channel::{Receiver, Sender};
     use lazy_static::lazy_static;
-    use crossbeam_channel::{Sender, Receiver};
     use std::thread;
 
     lazy_static! {
@@ -614,12 +521,107 @@ mod test {
 
     #[test]
     fn orchestrator_to_planet_start() {
-        todo!()
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (_, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+
+        thread::spawn(move || carbonium.run());
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::InternalStateRequest)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(
+            matches!(res, Ok(PlanetToOrchestrator::Stopped { planet_id: 0 })),
+            "Planet is stopped."
+        );
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(
+            matches!(
+                res,
+                Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+            ),
+            "Planet should be started."
+        );
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::InternalStateRequest)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(
+            matches!(
+                res,
+                Ok(PlanetToOrchestrator::InternalStateResponse {
+                    planet_id: _,
+                    planet_state: _
+                })
+            ),
+            "Planet is running."
+        );
     }
 
     #[test]
     fn orchestrator_to_planet_stop() {
-        todo!()
+        let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
+        let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
+        let (_, rx_explorer_to_planet) = crossbeam_channel::unbounded();
+        let mut carbonium = create_carbonium(
+            0,
+            rx_orchestrator_to_planet,
+            tx_planet_to_orchestrator,
+            rx_explorer_to_planet,
+        );
+
+        thread::spawn(move || carbonium.run());
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StartPlanetAI)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(
+            matches!(
+                res,
+                Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
+            ),
+            "Planet should be started."
+        );
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::StopPlanetAI)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(
+            matches!(
+                res,
+                Ok(PlanetToOrchestrator::StopPlanetAIResult { planet_id: 0 })
+            ),
+            "Planet should be stopped."
+        );
+
+        tx_orchestrator_to_planet
+            .send(OrchestratorToPlanet::InternalStateRequest)
+            .unwrap();
+
+        let res = rx_planet_to_orchestrator.recv();
+        assert!(
+            matches!(res, Ok(PlanetToOrchestrator::Stopped { planet_id: 0 })),
+            "Planet is stopped."
+        );
     }
 
     #[test]
@@ -644,7 +646,7 @@ mod test {
         assert!(matches!(
             res,
             Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
-        )); // FIX: Shouldn't we receive an acknowledgment?
+        ));
 
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::InternalStateRequest)
@@ -688,7 +690,7 @@ mod test {
         assert!(matches!(
             res,
             Ok(PlanetToOrchestrator::StartPlanetAIResult { planet_id: 0 })
-        )); // FIX: Shouldn't we receive an acknowledgment?
+        ));
 
         tx_orchestrator_to_planet
             .send(OrchestratorToPlanet::Sunray(FORGE.generate_sunray()))
