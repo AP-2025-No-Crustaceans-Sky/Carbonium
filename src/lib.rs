@@ -5,8 +5,8 @@ use common_game::{
     components::{
         planet::{Planet, PlanetAI, PlanetState, PlanetType},
         resource::{
-            BasicResource, BasicResourceType, Carbon, Combinator, ComplexResource,
-            ComplexResourceRequest, ComplexResourceType, Generator, GenericResource,
+            BasicResource, BasicResourceType, Combinator, ComplexResource, ComplexResourceRequest,
+            ComplexResourceType, Generator, GenericResource,
         },
         rocket::Rocket,
     },
@@ -36,7 +36,7 @@ macro_rules! payload {
 /// let (tx_orchestrator_to_planet, rx_orchestrator_to_planet) = crossbeam_channel::unbounded();
 /// let (tx_planet_to_orchestrator, rx_planet_to_orchestrator) = crossbeam_channel::unbounded();
 /// let (_, rx_explorer_to_planet) = crossbeam_channel::unbounded();
-/// let carbonium = carbonium::create_carbonium(
+/// let carbonium = carbonium::create_planet(
 ///     0,
 ///     rx_orchestrator_to_planet,
 ///     tx_planet_to_orchestrator,
@@ -45,7 +45,7 @@ macro_rules! payload {
 /// assert!(matches!(carbonium.planet_type(), common_game::components::planet::PlanetType::A));
 /// ```
 #[must_use]
-pub fn create_carbonium(
+pub fn create_planet(
     id: u32,
     rx_orchestrator: Receiver<OrchestratorToPlanet>,
     tx_orchestrator: Sender<PlanetToOrchestrator>,
@@ -64,23 +64,21 @@ pub fn create_carbonium(
 }
 
 struct Carbonium {
-    storage: Vec<Carbon>,
+    _private: (),
 }
 
 impl Carbonium {
     const PLANET_TYPE: PlanetType = PlanetType::A;
     const BASIC_RESOURCES: [BasicResourceType; 1] = [BasicResourceType::Carbon];
     const COMPLEX_RESOURCES: [ComplexResourceType; 0] = [];
-    const AI: Self = Self {
-        storage: Vec::new(),
-    };
+    const AI: Self = Self { _private: () };
 }
 
 impl PlanetAI for Carbonium {
     fn handle_orchestrator_msg(
         &mut self,
         state: &mut PlanetState,
-        generator: &Generator,
+        _: &Generator,
         _: &Combinator,
         msg: OrchestratorToPlanet,
     ) -> Option<PlanetToOrchestrator> {
@@ -105,31 +103,6 @@ impl PlanetAI for Carbonium {
                             String::from(
                                 "Has Rocket and Uncharged EnergyCell found. Sunray consumed to \
                                     charge an EnergyCell.",
-                            )
-                        );
-                        log_event.emit();
-                    } else if let Some((energy_cell, _)) = state.full_cell()
-                        && let Ok(carbon) = generator.make_carbon(energy_cell)
-                    {
-                        // Consume the EnergyCell to produce Carbon for storage and charge it.
-                        self.storage.push(carbon);
-                        energy_cell.charge(sunray);
-                        log_event.payload = payload!(
-                            String::from("SunrayAck"),
-                            String::from(
-                                "Has Rocket and Uncharged EnergyCell not found. Generated Carbon \
-                                    and stored it then consumed the Sunray to charge an EnergyCell.",
-                            )
-                        );
-                        log_event.emit();
-                    } else {
-                        // Something went wrong.
-                        log_event.channel = Channel::Error;
-                        log_event.payload = payload!(
-                            String::from("SunrayAck"),
-                            String::from(
-                                "No Rocket and Uncharged EnergyCell found and not found. This \
-                                    should't ever happen.",
                             )
                         );
                         log_event.emit();
@@ -256,44 +229,41 @@ impl PlanetAI for Carbonium {
                 explorer_id,
                 resource,
             } => {
-                if resource == BasicResourceType::Carbon {
-                    // If there is Carbon in the storage return that otherwise try to build it.
-                    if let Some(carbon) = self.storage.pop() {
-                        log_event.receiver_id = format!("{explorer_id}");
-                        log_event.payload = payload!(
-                            String::from("GenerateResourceResponse"),
-                            String::from("Carbon popped from storage.")
-                        );
-                        log_event.emit();
-                        Some(PlanetToExplorer::GenerateResourceResponse {
-                            resource: Some(BasicResource::Carbon(carbon)),
-                        })
-                    } else if let Some((energy_cell, _)) = state.full_cell()
-                        && let Ok(carbon) = generator.make_carbon(energy_cell)
-                    {
-                        log_event.receiver_id = format!("{explorer_id}");
-                        log_event.payload = payload!(
-                            String::from("GenerateResourceResponse"),
-                            String::from("Carbon created from EnergyCell.")
-                        );
-                        log_event.emit();
-                        Some(PlanetToExplorer::GenerateResourceResponse {
-                            resource: Some(BasicResource::Carbon(carbon)),
-                        })
-                    } else {
-                        log_event.receiver_id = format!("{explorer_id}");
-                        log_event.payload = payload!(
-                            String::from("GenerateResourceResponse"),
-                            String::from("Storage is empty and no EnergyCell is charged.")
-                        );
-                        log_event.emit();
-                        Some(PlanetToExplorer::GenerateResourceResponse { resource: None })
-                    }
-                } else {
+                if resource != BasicResourceType::Carbon {
                     log_event.receiver_id = format!("{explorer_id}");
                     log_event.payload = payload!(
                         String::from("GenerateResourceResponse"),
                         format!("{resource:?} not supported.")
+                    );
+                    log_event.emit();
+                    return Some(PlanetToExplorer::GenerateResourceResponse { resource: None });
+                }
+                if !state.has_rocket() && state.to_dummy().charged_cells_count < 2 {
+                    log_event.receiver_id = format!("{explorer_id}");
+                    log_event.payload = payload!(
+                        String::from("GenerateResourceResponse"),
+                        format!("Planet needs EnergyCells to build an emergency Rocket.")
+                    );
+                    log_event.emit();
+                    return Some(PlanetToExplorer::GenerateResourceResponse { resource: None });
+                }
+                if let Some((energy_cell, _)) = state.full_cell()
+                    && let Ok(carbon) = generator.make_carbon(energy_cell)
+                {
+                    log_event.receiver_id = format!("{explorer_id}");
+                    log_event.payload = payload!(
+                        String::from("GenerateResourceResponse"),
+                        String::from("Carbon created from EnergyCell.")
+                    );
+                    log_event.emit();
+                    Some(PlanetToExplorer::GenerateResourceResponse {
+                        resource: Some(BasicResource::Carbon(carbon)),
+                    })
+                } else {
+                    log_event.receiver_id = format!("{explorer_id}");
+                    log_event.payload = payload!(
+                        String::from("GenerateResourceResponse"),
+                        String::from("Storage is empty and no EnergyCell is charged.")
                     );
                     log_event.emit();
                     Some(PlanetToExplorer::GenerateResourceResponse { resource: None })
