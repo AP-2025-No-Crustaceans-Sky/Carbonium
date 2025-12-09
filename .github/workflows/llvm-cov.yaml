@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: your-private/repo_name
-          token: ${{ secrets.secrets.AP_COMMON_TOKEN }}
+          token: ${{ secrets.AP_COMMON_TOKEN }}
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests and generate coverage summary (fails if tests fail)
