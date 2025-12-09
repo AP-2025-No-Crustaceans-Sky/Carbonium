@@ -11,9 +11,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
-      - name: Configure Git to access private repos
-        run: |
-          git config --global url."https://${{ secrets.AP_COMMON_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+      - name: Checkout private repo
+        uses: actions/checkout@v2
+        with:
+          repository: your-private/repo_name
+          token: ${{ secrets.secrets.AP_COMMON_TOKEN }}
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests and generate coverage summary (fails if tests fail)
