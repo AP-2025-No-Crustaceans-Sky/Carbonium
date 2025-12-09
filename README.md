@@ -12,6 +12,8 @@ https://discord.gg/cgjpDQ9vsj
 
 ### Testing coverage
 
+![Testing](https://github.com/AP-2025-No-Crustaceans-Sky/Carbonium/actions/workflows/llvm-cov.yaml/badge.svg)
+
 | Filename | Function Coverage | Line Coverage       | Region Coverage     | Branch Coverage |
 |----------|--------------------|----------------------|----------------------|------------------|
 | lib.rs   | 100.00% (7/7)      | 83.28% (244/293)     | 88.24% (270/306)     | (0/0)           |
