@@ -18,3 +18,4 @@ https://discord.gg/cgjpDQ9vsj
 | tests.rs | 100.00% (22/22)    | 97.82% (449/459)     | 93.57% (655/700)     | (0/0)           |
 | Totals   | 100.00% (29/29)    | 92.15% (693/752)     | 91.95% (925/1006)    | (0/0)           |
 
+WIP: automatic testing (common repo is private... GH Action needs extra setup)
