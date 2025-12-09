@@ -1,4 +1,4 @@
-# Carbon 🪐
+# **Carbonium** 🪐
 
 The most resilient planet in your Galaxy™ 🚀🏭
 
