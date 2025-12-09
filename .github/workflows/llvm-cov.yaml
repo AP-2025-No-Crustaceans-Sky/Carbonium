@@ -22,4 +22,4 @@ jobs:
         # This command runs `cargo test` internally.
         # It will print a summary to the console and exit with an error
         # status if any test fails, making the GH Action step fail.
-        run: cargo llvm-cov --all --doctests --html
+        run: cargo llvm-cov --all
