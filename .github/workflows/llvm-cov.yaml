@@ -28,14 +28,14 @@ jobs:
         # This command runs `cargo test` internally.
         # It will print a summary to the console and exit with an error
         # status if any test fails, making the GH Action step fail.
-        run: cargo llvm-cov --all --doctests --html
+        run: cargo +nightly llvm-cov --all --doctests --html
 
       - name: Run tests and generate coverage summary (fails if tests fail)
         if: github.ref != 'refs/heads/main' 
         # This command runs `cargo test` internally.
         # It will print a summary to the console and exit with an error
         # status if any test fails, making the GH Action step fail.
-        run: cargo llvm-cov --all --doctests
+        run: cargo +nightly llvm-cov --all --doctests
 
       # - name: Upload coverage report
       #   uses: actions/upload-artifact@v4
