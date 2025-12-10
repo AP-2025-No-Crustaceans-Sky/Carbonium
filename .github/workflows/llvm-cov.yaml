@@ -54,7 +54,7 @@ jobs:
     steps:
       # Download the coverage HTML artifact from the test job
       - name: Download coverage HTML artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.1.3
         with:
           name: coverage-html
           path: coverage-html
