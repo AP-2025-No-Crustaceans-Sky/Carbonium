@@ -22,14 +22,14 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Run tests and generate coverage summary (fails if tests fail)
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/master'
         # This command runs `cargo test` internally.
         # It will print a summary to the console and exit with an error
         # status if any test fails, making the GH Action step fail.
         run: cargo +nightly llvm-cov --all --doctests --html
 
       - name: Run tests and generate coverage summary (fails if tests fail)
-        if: github.ref != 'refs/heads/main'
+        if: github.ref != 'refs/heads/master'
         # This command runs `cargo test` internally.
         # It will print a summary to the console and exit with an error
         # status if any test fails, making the GH Action step fail.
@@ -37,7 +37,7 @@ jobs:
 
       # Upload coverage HTML for the deploy job
       - name: Upload coverage HTML artifact
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
@@ -45,7 +45,7 @@ jobs:
 
   deploy-coverage:
     needs: test-and-verify
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
