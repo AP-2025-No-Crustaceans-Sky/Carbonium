@@ -1,0 +1,56 @@
+name: CI Coverage with Private Dependencies
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-coverage:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Check for PRIVATE_REPO_PAT secret
+        run: |
+          if [ -z "${{ secrets.PRIVATE_REPO_PAT }}" ]; then
+            echo "::error::PRIVATE_REPO_PAT secret is not set!"
+            echo "::error::This workflow requires a Personal Access Token to access private Git dependencies."
+            echo "::error::Please add PRIVATE_REPO_PAT as a repository secret with read access to private repositories."
+            echo "::error::Go to: Settings > Secrets and variables > Actions > New repository secret"
+            exit 1
+          fi
+          echo "PRIVATE_REPO_PAT secret is configured"
+      
+      - name: Configure Git to use token for private dependencies
+        env:
+          PRIVATE_REPO_PAT: ${{ secrets.PRIVATE_REPO_PAT }}
+        run: |
+          # Configure git to rewrite HTTPS URLs to include the token
+          git config --global url."https://${PRIVATE_REPO_PAT}@github.com/".insteadOf "https://github.com/"
+          # Also handle SSH URLs by rewriting them to HTTPS with token
+          git config --global url."https://${PRIVATE_REPO_PAT}@github.com/".insteadOf "ssh://git@github.com/"
+          echo "Git configured to use token for private repository access"
+      
+      - name: Install Rust nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview, rust-src
+      
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      
+      - name: Fetch dependencies
+        run: cargo fetch
+      
+      - name: Run tests and generate coverage with HTML report
+        run: cargo +nightly llvm-cov --all --doctests --html
+      
+      - name: Upload coverage HTML artifact
+        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-report
+          path: target/llvm-cov/html/
+          retention-days: 30
