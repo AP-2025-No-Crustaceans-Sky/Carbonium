@@ -1,0 +1,83 @@
+name: CI (Test & Coverage)
+
+on: [push, pull_request]
+
+jobs:
+  test-and-coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail early if PRIVATE_REPO_PAT is not set
+        env:
+          PRIVATE_REPO_PAT: ${{ secrets.PRIVATE_REPO_PAT }}
+        run: |
+          if [ -z "$PRIVATE_REPO_PAT" ]; then
+            echo "Error: PRIVATE_REPO_PAT secret is not set."
+            echo "This secret is required to fetch the private common-game dependency."
+            echo "Please add a read-only PAT as a repository secret named PRIVATE_REPO_PAT."
+            exit 1
+          fi
+
+      - name: Configure git to use PRIVATE_REPO_PAT for private repos
+        run: |
+          git config --global url."https://${{ secrets.PRIVATE_REPO_PAT }}@github.com/".insteadOf "ssh://git@github.com/"
+
+      - name: Install Rust nightly toolchain with required components
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src, llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run tests and generate coverage with HTML (main/master branch)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: cargo +nightly llvm-cov --all --doctests --html
+
+      - name: Run tests and generate coverage without HTML (other branches)
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
+        run: cargo +nightly llvm-cov --all --doctests
+
+      - name: Upload coverage HTML artifact
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: target/llvm-cov/html
+
+  deploy-coverage:
+    needs: test-and-coverage
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      # Download the coverage HTML artifact from the test job
+      - name: Download coverage HTML artifact
+        uses: actions/download-artifact@v4.1.3
+        with:
+          name: coverage-html
+          path: coverage-html
+
+      # Prepare the directory for GitHub Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # Upload the HTML results as the 'github-pages' artifact
+      - name: Upload coverage artifact for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: coverage-html
+
+      # Deploy the artifact to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
