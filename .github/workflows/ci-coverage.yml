@@ -51,9 +51,33 @@ jobs:
           name: coverage-html
           path: target/llvm-cov/html
 
-      - name: Deploy coverage HTML to GitHub Pages
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: peaceiris/actions-gh-pages@v3
+  deploy-coverage:
+    needs: test-and-coverage
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      # Download the coverage HTML artifact from the test job
+      - name: Download coverage HTML artifact
+        uses: actions/download-artifact@v4.1.3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/llvm-cov/html
+          name: coverage-html
+          path: coverage-html
+
+      # Prepare the directory for GitHub Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # Upload the HTML results as the 'github-pages' artifact
+      - name: Upload coverage artifact for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: coverage-html
+
+      # Deploy the artifact to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
