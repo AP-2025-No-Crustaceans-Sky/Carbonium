@@ -14,8 +14,10 @@ jobs:
           fetch-depth: 0
 
       - name: Fail early if PRIVATE_REPO_PAT is not set
+        env:
+          PRIVATE_REPO_PAT: ${{ secrets.PRIVATE_REPO_PAT }}
         run: |
-          if [ -z "${{ secrets.PRIVATE_REPO_PAT }}" ]; then
+          if [ -z "$PRIVATE_REPO_PAT" ]; then
             echo "Error: PRIVATE_REPO_PAT secret is not set."
             echo "This secret is required to fetch the private common-game dependency."
             echo "Please add a read-only PAT as a repository secret named PRIVATE_REPO_PAT."
