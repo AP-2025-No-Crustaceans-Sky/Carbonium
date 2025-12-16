@@ -10,8 +10,8 @@ The most resilient planet in your Galaxy™ 🚀🏭
 
 https://discord.gg/cgjpDQ9vsj
 
-### Testing coverage
+### Testing coverage (`master` branch)
 
-![Testing](https://github.com/AP-2025-No-Crustaceans-Sky/Carbonium/actions/workflows/ci-coverage.yml/badge.svg)
+![Testing](https://github.com/AP-2025-No-Crustaceans-Sky/Carbonium/actions/workflows/ci-coverage.yml/badge.svg?branch=master)
 
 [Full coverage report](https://ap-2025-no-crustaceans-sky.github.io/Carbonium/)
