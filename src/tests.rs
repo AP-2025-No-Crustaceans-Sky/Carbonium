@@ -1,12 +1,15 @@
 use crate::{Carbonium, create_planet};
-use common_game::components::forge::Forge;
 use common_game::{
-    components::resource::{
-        BasicResource, BasicResourceType, ComplexResourceRequest, ComplexResourceType,
-        GenericResource,
+    components::{
+        forge::Forge,
+        resource::{
+            BasicResource, BasicResourceType, ComplexResourceRequest, ComplexResourceType,
+            GenericResource,
+        },
     },
-    protocols::messages::{
-        ExplorerToPlanet, OrchestratorToPlanet, PlanetToExplorer, PlanetToOrchestrator,
+    protocols::{
+        orchestrator_planet::{OrchestratorToPlanet, PlanetToOrchestrator},
+        planet_explorer::{ExplorerToPlanet, PlanetToExplorer},
     },
 };
 use lazy_static::lazy_static;
@@ -333,7 +336,7 @@ fn explorer_to_planet_supported_basic_resources() {
     tx_orchestrator_to_planet
         .send(OrchestratorToPlanet::IncomingExplorerRequest {
             explorer_id: 0,
-            new_mpsc_sender: tx_planet_to_explorer,
+            new_sender: tx_planet_to_explorer,
         })
         .unwrap();
 
@@ -342,6 +345,7 @@ fn explorer_to_planet_supported_basic_resources() {
         res,
         Ok(PlanetToOrchestrator::IncomingExplorerResponse {
             planet_id: 0,
+            explorer_id: 0,
             res: Ok(())
         })
     ));
@@ -390,7 +394,7 @@ fn explorer_to_planet_supported_combinations() {
     tx_orchestrator_to_planet
         .send(OrchestratorToPlanet::IncomingExplorerRequest {
             explorer_id: 0,
-            new_mpsc_sender: tx_planet_to_explorer,
+            new_sender: tx_planet_to_explorer,
         })
         .unwrap();
 
@@ -399,6 +403,7 @@ fn explorer_to_planet_supported_combinations() {
         res,
         Ok(PlanetToOrchestrator::IncomingExplorerResponse {
             planet_id: 0,
+            explorer_id: 0,
             res: Ok(())
         })
     ));
@@ -447,7 +452,7 @@ fn explorer_to_planet_generate_resource() {
     tx_orchestrator_to_planet
         .send(OrchestratorToPlanet::IncomingExplorerRequest {
             explorer_id: 0,
-            new_mpsc_sender: tx_planet_to_explorer,
+            new_sender: tx_planet_to_explorer,
         })
         .unwrap();
 
@@ -456,6 +461,7 @@ fn explorer_to_planet_generate_resource() {
         res,
         Ok(PlanetToOrchestrator::IncomingExplorerResponse {
             planet_id: 0,
+            explorer_id: 0,
             res: Ok(())
         })
     ));
@@ -582,7 +588,7 @@ fn explorer_to_planet_combine_resource() {
     tx_orchestrator_to_planet
         .send(OrchestratorToPlanet::IncomingExplorerRequest {
             explorer_id: 0,
-            new_mpsc_sender: tx_planet_to_explorer,
+            new_sender: tx_planet_to_explorer,
         })
         .unwrap();
 
@@ -591,6 +597,7 @@ fn explorer_to_planet_combine_resource() {
         res,
         Ok(PlanetToOrchestrator::IncomingExplorerResponse {
             planet_id: 0,
+            explorer_id: 0,
             res: Ok(())
         })
     ));
@@ -673,7 +680,7 @@ fn explorer_to_planet_available_energy_cells() {
     tx_orchestrator_to_planet
         .send(OrchestratorToPlanet::IncomingExplorerRequest {
             explorer_id: 0,
-            new_mpsc_sender: tx_planet_to_explorer,
+            new_sender: tx_planet_to_explorer,
         })
         .unwrap();
 
@@ -682,6 +689,7 @@ fn explorer_to_planet_available_energy_cells() {
         res,
         Ok(PlanetToOrchestrator::IncomingExplorerResponse {
             planet_id: 0,
+            explorer_id: 0,
             res: Ok(())
         })
     ));
